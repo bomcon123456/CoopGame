@@ -4,6 +4,8 @@
 #include "DrawDebugHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystem.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Particles/ParticleSystemComponent.h"
 
 // Sets default values
 ASWeapon::ASWeapon()
@@ -15,6 +17,7 @@ ASWeapon::ASWeapon()
 	RootComponent = MeshComp;
 
 	MuzzleSocketName = "MuzzleSocket";
+	TracerTargetName = "BeamEnd";
 }
 
 // Called when the game starts or when spawned
@@ -47,6 +50,8 @@ void ASWeapon::Fire()
 		
 		FVector ShotDirection = EyeRotation.Vector();
 		FVector TraceEnd = EyeLocation + (ShotDirection * 1000);
+		// Particle "Target" parameter for the TracerEffect. If doesn't hit, take the tracend, if hit take the hit.impactpoint
+		FVector TracerEndPoint = TraceEnd;
 		/*
 		* We ignore the player/ the owner and the gun itself
 		* We set trace complex to true => trace every triangle in the mesh we loooking at (more expensive but more effective)
@@ -81,10 +86,12 @@ void ASWeapon::Fire()
 			{
 				UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactEffect, Hit.ImpactPoint, Hit.ImpactNormal.Rotation(),true);
 			}
+			TracerEndPoint = Hit.ImpactPoint;
+
 		}
 		DrawDebugLine(GetWorld(), EyeLocation, TraceEnd, FColor::White, false, 1.0f, 0, 1.0f);
 
-		/*
+		/* THIS SECTION BELOW IS CALLED ALL THE TIME EVEN WE DON'T HIT ANYTHING.
 		 * Because the character and the gun will change rapidly, so we have to attached the emitter
 		 * Or it will spawn at one place which is stupid
 		 * Other params is specified already and we use it.
@@ -93,6 +100,16 @@ void ASWeapon::Fire()
 		if (MuzzleEffect)
 		{
 			UGameplayStatics::SpawnEmitterAttached(MuzzleEffect, MeshComp, MuzzleSocketName);
+		}
+
+		if (TracerEffect)
+		{
+			FVector MuzzleLocation = MeshComp->GetSocketLocation(MuzzleSocketName);
+			UParticleSystemComponent* TracerComp = UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), TracerEffect, MuzzleLocation);
+			if (TracerComp)
+			{
+				TracerComp->SetVectorParameter(TracerTargetName, TracerEndPoint);
+			}
 		}
 	}
 }
