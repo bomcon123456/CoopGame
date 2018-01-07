@@ -14,9 +14,11 @@ class COOPGAME_API ASGrenadeLauncher : public ASWeapon
 {
 	GENERATED_BODY()
 	
-protected:
+public:
 	virtual void Fire() override;
 
-	
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Projectile")
+	TSubclassOf<AActor> ProjectileClass;
 	
 };
