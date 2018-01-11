@@ -9,6 +9,7 @@
 #include "CoopGame.h"
 #include "TimerManager.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
+#include "Net/UnrealNetwork.h"
 
 /** Console variable. ( when press "`" )*/
 static int32 DebugWeaponDrawing = 0;
@@ -29,6 +30,11 @@ ASWeapon::ASWeapon()
 	TracerTargetName = "BeamEnd";
 	BaseDamage = 20.0f;
 	RateOfFire = 600.0f;
+	
+	// When we spawn this weapon on the server, we spawn it in the client too
+	SetReplicates(true);
+	NetUpdateFrequency = 66.0f;
+	MinNetUpdateFrequency = 33.0f;
 }
 
 void ASWeapon::BeginPlay()
@@ -41,6 +47,10 @@ void ASWeapon::BeginPlay()
 void ASWeapon::Fire()
 {
 	// Trace the world, from pawn eyes to crosshair location
+	if (Role < ROLE_Authority)	// consider this role is not able to do it.
+	{
+		ServerFiring();
+	}
 	AActor* MyOwner = GetOwner();
 	if (MyOwner)
 	{
@@ -56,6 +66,8 @@ void ASWeapon::Fire()
 		FVector TraceEnd = EyeLocation + (ShotDirection * 1000);
 		// Particle "Target" parameter for the TracerEffect. If doesn't hit, take the tracend, if hit take the hit.impactpoint
 		FVector TracerEndPoint = TraceEnd;
+
+		EPhysicalSurface SurfaceType = SurfaceType_Default;
 		/*
 		* We ignore the player/ the owner and the gun itself
 		* We set trace complex to true => trace every triangle in the mesh we loooking at (more expensive but more effective)
@@ -80,7 +92,7 @@ void ASWeapon::Fire()
 			 * We can apply physics simple from that
 			 * @2ndparam is BaseDamage
 			 */
-			EPhysicalSurface SurfaceType = UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get());
+			SurfaceType = UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get());
 			if (SurfaceType == SURFACE_FLESHVULNERABLE)
 			{
 				ActualDamage *= 4.0f;
@@ -94,24 +106,8 @@ void ASWeapon::Fire()
 				MyOwner->GetInstigatorController(),
 				this,
 				DamageType);
-		
-			UParticleSystem* SelectedEffect = nullptr;
-			switch (SurfaceType)
-			{
-			case SURFACE_FLESHDEFAULT:
-			case SURFACE_FLESHVULNERABLE:
-				SelectedEffect = FleshImpactEffect;
-				break;
-			default:
-				SelectedEffect = DefaultImpactEffect;
-				break;
-			}
 
-			if (SelectedEffect)
-			{
-				UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), SelectedEffect, Hit.ImpactPoint, Hit.ImpactNormal.Rotation(), true);
-			}
-
+			PlayImpactEffects(SurfaceType, Hit.ImpactPoint);
 			TracerEndPoint = Hit.ImpactPoint;
 
 		}
@@ -127,11 +123,29 @@ void ASWeapon::Fire()
 		 * If Particle Effect is not assigned it will not run
 		 */
 		PlayFireEffect(TracerEndPoint);
-
+		if (Role == ROLE_Authority)
+		{
+			HitScanTrace.TraceTo = TracerEndPoint;
+			HitScanTrace.SurfaceType = SurfaceType;
+		}
 		LastFireTime = GetWorld()->TimeSeconds;
 	}
 }
+ 
+void ASWeapon::ServerFiring_Implementation()
+{
+	Fire();
+}
 
+	/*
+	 * Validate the code and see if there is anything wrong
+	 * If wrong, the one who call ServerFire outsisde Server will be disconnected
+	 * In this case, we don't care so return true it's a must
+	 */
+bool ASWeapon::ServerFiring_Validate()
+{
+	return true;
+}
 void ASWeapon::StartFire()
 {
 	float FirstDelay = FMath::Max(LastFireTime + TimeBetweenShots - GetWorld()->TimeSeconds, 0.0f);
@@ -173,4 +187,42 @@ void ASWeapon::PlayFireEffect(FVector TraceEnd)
 			PC->ClientPlayCameraShake(FireCamShake);
 		}
 	}
+}
+
+void ASWeapon::PlayImpactEffects(EPhysicalSurface SurfaceType, FVector ImpactPoint)
+{
+	UParticleSystem* SelectedEffect = nullptr;
+	switch (SurfaceType)
+	{
+	case SURFACE_FLESHDEFAULT:
+	case SURFACE_FLESHVULNERABLE:
+		SelectedEffect = FleshImpactEffect;
+		break;
+	default:
+		SelectedEffect = DefaultImpactEffect;
+		break;
+	}
+
+	if (SelectedEffect)
+	{
+		FVector MuzzleLocation = MeshComp->GetSocketLocation(MuzzleSocketName);
+		FVector ShotDirection = ImpactPoint - MuzzleLocation;
+		ShotDirection.Normalize();
+		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), SelectedEffect, ImpactPoint, ShotDirection.Rotation(), true);
+	}
+}
+
+void ASWeapon::OnRep_HitScanTrace()
+{
+	// Play cosmetic FX.
+	PlayFireEffect(HitScanTrace.TraceTo);
+	PlayImpactEffects(HitScanTrace.SurfaceType, HitScanTrace.TraceTo);
+}
+
+void ASWeapon::GetLifetimeReplicatedProps(TArray< FLifetimeProperty > & OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	
+	// Don't replicate to the server because we've already done FX.
+	DOREPLIFETIME_CONDITION(ASWeapon, HitScanTrace, COND_SkipOwner);
 }

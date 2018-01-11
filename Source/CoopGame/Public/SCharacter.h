@@ -39,13 +39,13 @@ protected:
 	void StopFire();
 
 	UFUNCTION()
-	void OnHealthChanged(USHealthComponent* HealthComp, float Health, float HealthDelta, const class UDamageType* DamageType, class AController* InstigatedBy, AActor* DamageCauser);
+	void OnHealthChanged(USHealthComponent* OwningHealthComp, float Health, float HealthDelta, const class UDamageType* DamageType, class AController* InstigatedBy, AActor* DamageCauser);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UCameraComponent* CameraComp;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USpringArmComponent* SpringArmComp;
-
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USHealthComponent* HealthComp;
 
 	/** These variables help the ZOOMING function.*/
@@ -57,14 +57,16 @@ protected:
 	float ZoomInterpSpeed;
 
 	/** These variable for weapons*/
+	UPROPERTY(Replicated)
 	ASWeapon* CurrentWeapon;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Player")
 	TSubclassOf<ASWeapon> StarterWeaponClass;
 	UPROPERTY(VisibleDefaultsOnly, Category = "Player")
 	FName WeaponAttachSocketName;
 
 	/** Pawn died previously */
-	UPROPERTY(BlueprintReadOnly, Category ="Player")
+	UPROPERTY(Replicated, BlueprintReadOnly, Category ="Player")
 	bool bDied;
 public:	
 	// Called every frame
