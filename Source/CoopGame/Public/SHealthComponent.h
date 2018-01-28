@@ -30,7 +30,8 @@ protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 	
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "HealthComponent")
+	// Health will call this function when replicated => Client can have it too.
+	UPROPERTY(ReplicatedUsing=OnRep_Health, BlueprintReadOnly, Category = "HealthComponent")
 	float Health;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HealthComponent")
@@ -39,6 +40,15 @@ protected:
 	UFUNCTION()
 	void HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType, class AController* InstigatedBy, AActor* DamageCauser);
 
+
+	/*
+	 * !!!! Trick:
+	 * When you replicateUsing, if you let it has 1 parameter, that parameter will hold the old value of that variable
+	 * In this case, Health is replicated => the Health before replicating will be loaded in to "OldHealth"
+	 * Use to calculate the damage caused to the owner of this comp.
+	 */
+	UFUNCTION()
+	void OnRep_Health(float OldHealth);
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnHealthChangedSignature OnHealthChanged;

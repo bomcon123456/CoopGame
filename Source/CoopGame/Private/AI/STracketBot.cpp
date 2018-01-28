@@ -52,8 +52,11 @@ void ASTracketBot::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Find initial next path point.
-	NextPathPoint = GetNextPathPoint();
+	// Find initial next path point on ServerOnly because Nav only exists in Server
+	if (Role == ROLE_Authority) 
+	{
+		NextPathPoint = GetNextPathPoint();
+	}
 
 }
 
@@ -116,68 +119,83 @@ void ASTracketBot::SelfDestruct()
 	if (bExploded) { return; }
 	bExploded = true;
 	UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ExplosionEffect, GetActorLocation());
-
-	TArray<AActor*> IgnoredActors;
-	IgnoredActors.Add(this);
-
-	UGameplayStatics::ApplyRadialDamage(this, ExplosionDamage, GetActorLocation(), ExplosionRadius,
-		nullptr, IgnoredActors, this, GetInstigatorController(), true);
-
-	DrawDebugSphere(GetWorld(), GetActorLocation(), ExplosionRadius, 12, FColor::Yellow, false, 2.0f, 0, 1.0f);
-
 	UGameplayStatics::PlaySoundAtLocation(this, ExplodeSound, GetActorLocation());
 
-	Destroy();
+	MeshComp->SetVisibility(false, true);
+	MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// Apply damage => Server Only, then Health is replicated => the client will receive.
+	if(ROLE_Authority)
+	{
+		TArray<AActor*> IgnoredActors;
+		IgnoredActors.Add(this);
+
+		UGameplayStatics::ApplyRadialDamage(this, ExplosionDamage, GetActorLocation(), ExplosionRadius,
+			nullptr, IgnoredActors, this, GetInstigatorController(), true);
+
+		DrawDebugSphere(GetWorld(), GetActorLocation(), ExplosionRadius, 12, FColor::Yellow, false, 2.0f, 0, 1.0f);
+
+		// Destroy after 2 sec
+		SetLifeSpan(2.0f);
+	}
 }
 
 // Called every frame
 void ASTracketBot::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	// Size function is the "Sqrt(X*X + Y*Y + Z*Z)" one, which gets the distance.
-	float DistanceToTarget = (GetActorLocation() - NextPathPoint).Size();
-
-	if (DistanceToTarget <= RequiredDistanceToTarget)		// If the actor is closer than 100 cm.
+	// Only server do this because we call GetNextPathPoint too.
+	if(Role == ROLE_Authority && !bExploded)
 	{
-		NextPathPoint = GetNextPathPoint();
-		DrawDebugString(GetWorld(), GetActorLocation(), "Target Reached!");
-	}
-	else
-	{
-		// Keep moving towards next path point (target)
-		/*
-		* From the world:
-		* This actor has a vector A(x,y,z) which has root at 0,0,0
-		* The Next Path Point is a vector P(a,b,c) which also has root at 0,0,0
-		* According to the sum of vector: A + ??? = P ( A and P same root)
-		* So the direction(with magnitude) will be ??? = P - A.
-		* Then normalize to get unit vector only.
-		*/
-		FVector ForceDirection = NextPathPoint - GetActorLocation();
-		ForceDirection.Normalize();
-		FVector ActorForce = ForceDirection * MovementForce;
+		// Size function is the "Sqrt(X*X + Y*Y + Z*Z)" one, which gets the distance.
+		float DistanceToTarget = (GetActorLocation() - NextPathPoint).Size();
 
-		MeshComp->AddForce(ActorForce, NAME_None, bUseVelocityChange);
+		if (DistanceToTarget <= RequiredDistanceToTarget)		// If the actor is closer than 100 cm.
+		{
+			NextPathPoint = GetNextPathPoint();
+			DrawDebugString(GetWorld(), GetActorLocation(), "Target Reached!");
+		}
+		else
+		{
+			// Keep moving towards next path point (target)
+			/*
+			* From the world:
+			* This actor has a vector A(x,y,z) which has root at 0,0,0
+			* The Next Path Point is a vector P(a,b,c) which also has root at 0,0,0
+			* According to the sum of vector: A + ??? = P ( A and P same root)
+			* So the direction(with magnitude) will be ??? = P - A.
+			* Then normalize to get unit vector only.
+			*/
+			FVector ForceDirection = NextPathPoint - GetActorLocation();
+			ForceDirection.Normalize();
+			FVector ActorForce = ForceDirection * MovementForce;
 
-		DrawDebugDirectionalArrow(GetWorld(), GetActorLocation(), GetActorLocation() + ForceDirection, 32, FColor::Red, false, 0.0f, 0, 1.0f);
+			MeshComp->AddForce(ActorForce, NAME_None, bUseVelocityChange);
+
+			DrawDebugDirectionalArrow(GetWorld(), GetActorLocation(), GetActorLocation() + ForceDirection, 32, FColor::Red, false, 0.0f, 0, 1.0f);
+		}
+		DrawDebugSphere(GetWorld(), NextPathPoint, 20, 12, FColor::Red, false, 0.0f, 1.0f);
 	}
-	DrawDebugSphere(GetWorld(), NextPathPoint, 20, 12, FColor::Red, false, 0.0f, 1.0f);
 }
 
 void ASTracketBot::NotifyActorBeginOverlap(AActor* OtherActor)
 {
-	if (!bStartedSelfDestruction)
+	if (!bStartedSelfDestruction && !bExploded)
 	{
 		ASCharacter* PlayerPawn = Cast<ASCharacter>(OtherActor);
 		if (PlayerPawn)
 		{
+			// Set damage => only server.
 			// Every 0.5 sec, this function will by call by this timer
 			// Start self destruction sequence when the player enter the sphere comp.
-			GetWorldTimerManager().SetTimer(TimerHandle_SelfDamage, this, &ASTracketBot::DamageSelf, SelfDamageInterval, true, 0.0f);
+			// Timer is server-manage-required
+			if (Role == ROLE_Authority)
+			{
+				GetWorldTimerManager().SetTimer(TimerHandle_SelfDamage, this, &ASTracketBot::DamageSelf, SelfDamageInterval, true, 0.0f);
+			}
 
 			bStartedSelfDestruction = true;
 
+			// Sound => both.
 			UGameplayStatics::SpawnSoundAttached(SelfDestructSound, RootComponent);
 		}
 	}
