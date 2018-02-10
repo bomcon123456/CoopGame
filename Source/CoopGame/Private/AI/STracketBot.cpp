@@ -83,7 +83,7 @@ FVector ASTracketBot::GetNextPathPoint()
 
 void ASTracketBot::DamageSelf()
 {
-	// Do 20 damage every tiem called
+	// Do 20 damage every time called
 	UGameplayStatics::ApplyDamage(this, 20, GetInstigatorController(), this, nullptr);
 }
 
@@ -108,10 +108,10 @@ void ASTracketBot::HandleTakeDamage(USHealthComponent* OwningHealthComp, float H
 
 	UE_LOG(LogTemp, Warning, TEXT("Health %s of %s"), *FString::SanitizeFloat(Health), *GetName())
 
-		if (Health <= 0.0f)
-		{
-			SelfDestruct();
-		}
+	if (Health <= 0.0f)
+	{
+		SelfDestruct();
+	}
 }
 
 void ASTracketBot::SelfDestruct()
@@ -124,7 +124,7 @@ void ASTracketBot::SelfDestruct()
 	MeshComp->SetVisibility(false, true);
 	MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	// Apply damage => Server Only, then Health is replicated => the client will receive.
-	if(ROLE_Authority)
+	if(Role == ROLE_Authority)
 	{
 		TArray<AActor*> IgnoredActors;
 		IgnoredActors.Add(this);

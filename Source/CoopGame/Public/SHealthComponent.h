@@ -43,7 +43,8 @@ protected:
 
 	/*
 	 * !!!! Trick:
-	 * When you replicateUsing, if you let it has 1 parameter, that parameter will hold the old value of that variable
+	 * When you replicateUsing a variable, then on its OnRep func:
+	 * if you let it has 1 parameter, that parameter will hold the old value of that variable
 	 * In this case, Health is replicated => the Health before replicating will be loaded in to "OldHealth"
 	 * Use to calculate the damage caused to the owner of this comp.
 	 */
