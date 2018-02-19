@@ -7,7 +7,6 @@
 #include "SExplosiveBarrel.generated.h"
 
 class UStaticMeshComponent;
-class UCapsuleComponent;
 class USHealthComponent;
 class URadialForceComponent;
 class UParticleSystem;

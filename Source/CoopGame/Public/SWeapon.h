@@ -17,10 +17,11 @@ struct FHitScanTrace
 	GENERATED_BODY()
 
 public:
-	// Do some vector packing for us (less size, more info)
+	// Must use TEnumAsByte to replicate Enum type.
 	UPROPERTY()
 	TEnumAsByte<EPhysicalSurface> SurfaceType;
 
+	// Do some vector packing for us (less size, more info)
 	UPROPERTY()
 	FVector_NetQuantize TraceTo;
 };

@@ -2,7 +2,6 @@
 
 #include "SExplosiveBarrel.h"
 #include "Components/StaticMeshComponent.h"
-#include "Components/CapsuleComponent.h"
 #include "SHealthComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystem.h"
